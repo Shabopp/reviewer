@@ -17,11 +17,11 @@ const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
     user: "shadabkp2003@gmail.com", // Your email
-    pass:  // Your app password
+    pass: "" // Your app password
   },
 });
 
-// Default route
+
 app.get("/", (req, res) => {
   res.send("Welcome to the Email Sending Service!");
 });
