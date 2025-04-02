@@ -24,23 +24,22 @@ const LoginForm = () => {
       alignItems: "center",
       justifyContent: "center",
       minHeight: "100vh", // Full screen height
-      backgroundColor: "#f7fafc", // Light background
+      backgroundColor: "white", // Light background
       padding: "1rem",
     },
     container: {
       width: "100%",
       maxWidth: "400px",
-      padding: "2.5rem",
+   
       backgroundColor: "#fff",
-      borderRadius: "16px",
-      boxShadow: "0 12px 30px rgba(0, 0, 0, 0.1)",
+      
     },
     title: {
       fontSize: "2rem",
       fontWeight: "700",
-      color: "#4a148c",
+      color: "#3d52A0",
       marginBottom: "1.5rem",
-      textAlign: "center",
+      
     },
     form: {
       display: "flex",
@@ -55,7 +54,7 @@ const LoginForm = () => {
     label: {
       fontSize: "0.9rem",
       fontWeight: "600",
-      color: "#4a5568",
+      color: "#3d52A0",
     },
     input: {
       padding: "0.75rem 1rem",
@@ -67,7 +66,7 @@ const LoginForm = () => {
     },
     button: {
       padding: "0.9rem",
-      backgroundColor: "#6b46c1",
+      backgroundColor: "#3d52A0",
       color: "#fff",
       border: "none",
       borderRadius: "10px",

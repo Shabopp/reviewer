@@ -1,9 +1,10 @@
 import { useState } from "react"
-import { setDoc, collection, addDoc } from "firebase/firestore"
-import { firestore } from "../../services/firebase" // Adjust the import path as needed
+import { doc,setDoc, collection, addDoc } from "firebase/firestore"
+import { auth,firestore } from "../../services/firebase" // Adjust the import path as needed
 import QRCode from "qrcode"
 import bcrypt from "bcryptjs"
 import axios from "axios"
+import { createUserWithEmailAndPassword } from "firebase/auth";
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -33,68 +34,66 @@ const AddRestaurant = () => {
   }
 
   const handleAddRestaurant = async (e) => {
-    e.preventDefault()
-    setLoading(true)
+    e.preventDefault();
+    setLoading(true);
+  
     try {
-      const hashedPassword = await bcrypt.hash(restaurantData.password, 10)
-
-      const newRestaurantRef = await addDoc(collection(firestore, "restaurants"), {
+      // 🔹 1️⃣ Create user in Firebase Authentication
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        restaurantData.email, // Restaurant owner's email
+        restaurantData.password // Plain text password
+      );
+  
+      const userId = userCredential.user.uid; // ✅ Get Firebase Authentication UID
+  
+      // 🔹 2️⃣ Generate feedback URL and QR code
+      const feedbackUrl = `https://yourdomain.com/feedback/${userId}`;
+      const qrCode = await QRCode.toDataURL(feedbackUrl);
+      setQRCodeUrl(qrCode);
+  
+      // 🔹 3️⃣ Upload QR Code to Cloudinary
+      const response = await fetch(qrCode);
+      const blob = await response.blob();
+      const formData = new FormData();
+      formData.append("file", blob);
+      formData.append("upload_preset", "ReviewIt"); // Replace with your Cloudinary preset
+  
+      const uploadResponse = await fetch("https://api.cloudinary.com/v1_1/dagusuc4s/image/upload", {
+        method: "POST",
+        body: formData,
+      });
+  
+      const uploadData = await uploadResponse.json();
+      const uploadedQRCodeUrl = uploadData.secure_url;
+  
+      // 🔹 4️⃣ Store restaurant details in Firestore (Using Auth UID as ID)
+      const newRestaurantRef = doc(firestore, "restaurants", userId);
+      await setDoc(newRestaurantRef, {
         ...restaurantData,
-        password: hashedPassword,
+        authId: userId, // ✅ Store Auth UID for authentication reference
         role: "restaurantOwner",
+        qrCodeUrl: uploadedQRCodeUrl,
         plan: "free tier",
         overallRating: 0,
         reviewCount: 0,
         dateOfJoining: new Date(),
         isPending: false,
-      })
-
-      const restaurantId = newRestaurantRef.id
-      const feedbackUrl = `https://876b-2401-4900-7c72-c5c3-7850-f952-ac1d-abd5.ngrok-free.app/feedback/${restaurantId}`
-      const qrCode = await QRCode.toDataURL(feedbackUrl)
-      setQRCodeUrl(qrCode)
-
-      const response = await fetch(qrCode)
-      const blob = await response.blob()
-
-      const formData = new FormData()
-      formData.append("file", blob)
-      formData.append("upload_preset", "ReviewIt")
-
-      const uploadResponse = await fetch("https://api.cloudinary.com/v1_1/dagusuc4s/image/upload", {
-        method: "POST",
-        body: formData,
-      })
-
-      const uploadData = await uploadResponse.json()
-      const uploadedQRCodeUrl = uploadData.secure_url
-
-      await setDoc(
-        newRestaurantRef,
-        {
-          ...restaurantData,
-          password: hashedPassword,
-          qrCodeUrl: uploadedQRCodeUrl,
-        },
-        { merge: true },
-      )
-
-      setToast({
-        message: "Restaurant added successfully!",
-        type: "success",
-      })
-
+      });
+  
+      // 🔹 5️⃣ Send email with login credentials
       try {
         await axios.post("http://localhost:5000/send-email", {
           to: restaurantData.email,
           subject: "Your Restaurant Login Credentials",
-          text: `Welcome to our platform! Here are your login credentials:\n\nEmail: ${restaurantData.email}\nPassword: ${restaurantData.password}`,
-        })
-        console.log("Email request sent to backend successfully.")
+          text: `Welcome to our platform!\n\nYour login credentials:\nEmail: ${restaurantData.email}\nPassword: ${restaurantData.password}\n\nPlease change your password after logging in.`,
+        });
+        console.log("Email request sent to backend successfully.");
       } catch (error) {
-        console.error("Failed to send email:", error.response?.data || error.message)
+        console.error("Failed to send email:", error.response?.data || error.message);
       }
-
+  
+      // 🔹 6️⃣ Reset form fields
       setRestaurantData({
         restaurantName: "",
         email: "",
@@ -102,23 +101,30 @@ const AddRestaurant = () => {
         location: "",
         restaurantType: "",
         password: "",
-      })
-      setQRCodeUrl("")
-
+      });
+      setQRCodeUrl("");
+  
+      // 🔹 7️⃣ Redirect user to dashboard
       setTimeout(() => {
         navigate("/dashboard"); // Change this to your actual dashboard route
-      }, 3000); // 3000 milliseconds = 3 seconds
-
+      }, 3000);
+  
+      setToast({
+        message: "Restaurant added successfully!",
+        type: "success",
+      });
+  
     } catch (error) {
-      console.error("Error adding restaurant:", error)
+      console.error("Error adding restaurant:", error);
       setToast({
         message: "Failed to add restaurant. Please try again.",
         type: "error",
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
+  
 
   return (
     <div className="container mx-auto py-10">

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
-import { firestore } from "../../services/firebase"; // Firebase configuration
+import { auth,firestore } from "../../services/firebase"; // Firebase configuration
 import { Button } from "@/components/ui/button"; // Custom Button component
+import { createUserWithEmailAndPassword } from "firebase/auth";
 import axios from "axios";
 import bcrypt from "bcryptjs";
 import QRCode from "qrcode"; // QR code generation library
@@ -54,9 +55,10 @@ const CreateProfile = () => {
   const handleAddRestaurant = async (demoRequestId) => {
     if (restaurantData && password && qrCodeUrl) {
       try {
+        // 1️⃣ Hash the password (Optional, as Firebase Authentication stores it securely)
         const hashedPassword = await bcrypt.hash(password, 10);
   
-        // Upload QR code image to Cloudinary
+        // 2️⃣ Upload QR code to Cloudinary
         const response = await fetch(qrCodeUrl);
         const blob = await response.blob();
         const formData = new FormData();
@@ -64,11 +66,8 @@ const CreateProfile = () => {
         formData.append("upload_preset", "ReviewIt"); // Replace with your Cloudinary upload preset
   
         const uploadResponse = await fetch(
-          "https://api.cloudinary.com/v1_1/dagusuc4s/image/upload", // Replace with your Cloudinary cloud name
-          {
-            method: "POST",
-            body: formData,
-          }
+          "https://api.cloudinary.com/v1_1/dagusuc4s/image/upload",
+          { method: "POST", body: formData }
         );
   
         const uploadData = await uploadResponse.json();
@@ -78,25 +77,36 @@ const CreateProfile = () => {
   
         const qrCodeImageUrl = uploadData.secure_url; // Get the secure URL of the uploaded image
   
-        const newRestaurantRef = doc(firestore, "restaurants", restaurantId);
+        // 3️⃣ Create user in Firebase Authentication
+        const userCredential = await createUserWithEmailAndPassword(
+          auth,
+          restaurantData.email, // Restaurant owner's email
+          password // Plain text password
+        );
+  
+        const userId = userCredential.user.uid; // Get the Firebase Authentication UID
+  
+        // 4️⃣ Store restaurant details in Firestore
+        const newRestaurantRef = doc(firestore, "restaurants", userId);
         await setDoc(newRestaurantRef, {
           ...restaurantData,
-          password: hashedPassword,
+          authId: userId, // Store Auth UID
           role: "restaurantOwner",
           qrCodeUrl: qrCodeImageUrl,
-          plan: "free tier", // Save the Cloudinary URL of the QR code image
-          overallRating: Number(restaurantData.overallRating) || 0, // Ensure overallRating is a number
+          plan: "free tier",
+          overallRating: Number(restaurantData.overallRating) || 0,
           reviewCount: restaurantData.reviewCount || 0,
           dateOfJoining: new Date(),
-          id: restaurantId,
+          id: userId, // Use Auth UID as the restaurant ID
           isPending: false, // Set isPending to false after adding the restaurant
         });
   
-        // Update the corresponding demo request to set isPending to false
-        const demoRequestRef = doc(firestore, "demoRequests", demoRequestId); // Reference to the demo request
-        await updateDoc(demoRequestRef, { isPending: false }); // Update isPending to false
+        // 5️⃣ Update the corresponding demo request to set isPending to false
+        const demoRequestRef = doc(firestore, "demoRequests", demoRequestId);
+        await updateDoc(demoRequestRef, { isPending: false });
   
-        console.log("Restaurant successfully added!");
+        console.log("Restaurant successfully added with Authentication!");
+  
       } catch (error) {
         console.error("Error adding restaurant:", error);
         alert("Something went wrong. Please try again.");
